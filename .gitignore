@@ -1,0 +1,17 @@
+# bytecode
+__pycache__/
+
+# add any environments as you go 
+env/
+
+# and your dataset spaces
+data/
+
+# any model storage spaces from previous runs
+saved_models/
+
+# storage spaces for any important results/performance 
+# metrics saved from previous work
+plots/
+performance_metrics/
+previous_run_performance/
