@@ -5,9 +5,11 @@ import yaml
 import matplotlib.pyplot as plt
 from sklearn.model_selection import KFold
 from torch.utils.data import DataLoader, Subset
+from torch.utils.tensorboard import SummaryWriter
 from contrastive_loss import ContrastiveLoss
 from siamese_network import SiameseNetwork
 from stock_pairs import StockPairs
+from datetime import datetime
 
 # load hyperparameters
 with open("../encoder_hyperparameters.yaml", "r") as f: config = yaml.safe_load(f)
@@ -39,6 +41,12 @@ all_train_negative_distances = []
 all_train_positive_distances = []
 all_val_negative_distances = []
 all_val_positive_distances = []
+
+# create log directory
+timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+log_dir = f"../runs/kfold_experiment/{timestamp}"
+os.makedirs(log_dir, exist_ok=True)
+writer = SummaryWriter(log_dir)
 
 # train/val loop
 for fold, (train_ids, val_ids) in enumerate(kfold.split(train_dataset)):
@@ -143,68 +151,13 @@ for fold, (train_ids, val_ids) in enumerate(kfold.split(train_dataset)):
               f"Train Avg Pos Distance: {avg_train_positive_distance:.6f}, "
               f"Val Avg Neg Distance: {avg_val_negative_distance:.6f}, "
               f"Val Avg Pos Distance: {avg_val_positive_distance:.6f}")
-    
-    # save fold metrics
-    all_train_losses.append(fold_train_losses)
-    all_val_losses.append(fold_val_losses)
-    all_train_negative_distances.append(fold_train_negative_distances)
-    all_train_positive_distances.append(fold_train_positive_distances)
-    all_val_negative_distances.append(fold_val_negative_distances)
-    all_val_positive_distances.append(fold_val_positive_distances)
-    
-    # plot and save fold results
-    plt.figure()
-    plt.plot(fold_train_losses, label='Training Loss')
-    plt.plot(fold_val_losses, label='Validation Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.title(f'Fold {fold + 1} Training and Validation Loss')
-    plt.legend()
-    plt.savefig(f'../plots/kfold/fold_{fold + 1}_loss_curve.png')
-    plt.close()
-    
-    fold_metrics.append({
-        "fold": fold + 1,
-        "train_losses": fold_train_losses,
-        "val_losses": fold_val_losses,
-        "train_negative_distances": fold_train_negative_distances,
-        "train_positive_distances": fold_train_positive_distances,
-        "val_negative_distances": fold_val_negative_distances,
-        "val_positive_distances": fold_val_positive_distances
-    })
+        
+        # tensor board logs
+        writer.add_scalar(f'Fold {fold + 1}/Train Loss', avg_train_loss, epoch)
+        writer.add_scalar(f'Fold {fold + 1}/Val Loss', avg_val_loss, epoch)
+        writer.add_scalar(f'Fold {fold + 1}/Train Avg Neg Distance', avg_train_negative_distance, epoch)
+        writer.add_scalar(f'Fold {fold + 1}/Train Avg Pos Distance', avg_train_positive_distance, epoch)
+        writer.add_scalar(f'Fold {fold + 1}/Val Avg Neg Distance', avg_val_negative_distance, epoch)
+        writer.add_scalar(f'Fold {fold + 1}/Val Avg Pos Distance', avg_val_positive_distance, epoch)
 
-# average metrics across all folds
-avg_train_losses = [sum(epoch_losses)/k_folds for epoch_losses in zip(*all_train_losses)]
-avg_val_losses = [sum(epoch_losses)/k_folds for epoch_losses in zip(*all_val_losses)]
-avg_train_negative_distances = [sum(epoch_distances)/k_folds for epoch_distances in zip(*all_train_negative_distances)]
-avg_train_positive_distances = [sum(epoch_distances)/k_folds for epoch_distances in zip(*all_train_positive_distances)]
-avg_val_negative_distances = [sum(epoch_distances)/k_folds for epoch_distances in zip(*all_val_negative_distances)]
-avg_val_positive_distances = [sum(epoch_distances)/k_folds for epoch_distances in zip(*all_val_positive_distances)]
-
-# plot average results
-plt.figure()
-plt.plot(avg_train_losses, label='Average Training Loss')
-plt.plot(avg_val_losses, label='Average Validation Loss')
-plt.xlabel('Epoch')
-plt.ylabel('Loss')
-plt.title('Average Training and Validation Loss')
-plt.legend()
-plt.savefig(f'../plots/kfold/average_loss_curve.png')
-plt.close()
-
-# save performance metrics
-average_metrics = {
-    "average_train_losses": avg_train_losses,
-    "average_val_losses": avg_val_losses,
-    "average_train_negative_distances": avg_train_negative_distances,
-    "average_train_positive_distances": avg_train_positive_distances,
-    "average_val_negative_distances": avg_val_negative_distances,
-    "average_val_positive_distances": avg_val_positive_distances
-}
-
-metrics = {
-    "fold_metrics": fold_metrics,
-    "average_metrics": average_metrics
-}
-
-with open("../performance_metrics/kfold/cv_metrics.json", "w") as f: json.dump(metrics, f, indent=4)
+writer.close()

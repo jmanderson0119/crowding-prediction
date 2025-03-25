@@ -7,11 +7,5 @@ env/
 # and your dataset spaces
 data/
 
-# any model storage spaces from previous runs
+# temp model output space
 saved_models/
-
-# storage spaces for any important results/performance 
-# metrics saved from previous work
-plots/
-performance_metrics/
-previous_run_performance/

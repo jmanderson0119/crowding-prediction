@@ -24,4 +24,8 @@ class SiameseNetwork(nn.Module):
         """
         embed1 = self.encoder(x1)
         embed2 = self.encoder(x2)
+        
+        embed1 = torch.nn.functional.normalize(embed1, p=2, dim=1)
+        embed2 = torch.nn.functional.normalize(embed2, p=2, dim=1)
+        
         return torch.norm(embed1 - embed2, p=2, dim=1)

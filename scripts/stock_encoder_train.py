@@ -1,5 +1,4 @@
 import os
-import json
 import torch
 import yaml
 import matplotlib.pyplot as plt
@@ -7,6 +6,8 @@ from torch.utils.data import DataLoader
 from contrastive_loss import ContrastiveLoss
 from siamese_network import SiameseNetwork
 from stock_pairs import StockPairs
+from torch.utils.tensorboard import SummaryWriter
+from datetime import datetime
 
 # load hyperparameters
 with open("../encoder_hyperparameters.yaml", "r") as f: config = yaml.safe_load(f)
@@ -21,8 +22,6 @@ margin = config["training"]["margin"]
 
 # performance metrics paths
 os.makedirs("../saved_models/", exist_ok=True)
-os.makedirs("../performance_metrics/full", exist_ok=True)
-os.makedirs("../plots/full", exist_ok=True)
 
 # load dataset
 train_dataset = StockPairs("../data/processed_data/training_pairs.csv")
@@ -41,13 +40,19 @@ model.to(device)
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-# performance trackign
+# performance tracking
 train_losses = []
 test_losses = []
 train_negative_distances = []
 train_positive_distances = []
 test_negative_distances = []
 test_positive_distances = []
+
+# create log directory
+timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+log_dir = f"../runs/full_experiment/{timestamp}"
+os.makedirs(log_dir, exist_ok=True)
+writer = SummaryWriter(log_dir)
 
 # train/eval loop
 for epoch in range(num_epochs):
@@ -64,7 +69,7 @@ for epoch in range(num_epochs):
         stock1_batch = stock1_batch.to(device)
         stock2_batch = stock2_batch.to(device)
         label_batch = label_batch.to(device)
-        
+
         distances = model(stock1_batch, stock2_batch)
         loss = criterion(distances, label_batch)
         
@@ -126,28 +131,15 @@ for epoch in range(num_epochs):
           f"Train Avg Pos Distance: {avg_train_positive_distance:.6f}, "
           f"Test Avg Neg Distance: {avg_test_negative_distance:.6f}, "
           f"Test Avg Pos Distance: {avg_test_positive_distance:.6f}")
+    
+    # tensor board logs
+    writer.add_scalar('Train Loss', avg_train_loss, epoch)
+    writer.add_scalar('Test Loss', avg_test_loss, epoch)
+    writer.add_scalar('Train Avg Neg Distance', avg_train_negative_distance, epoch)
+    writer.add_scalar('Train Avg Pos Distance', avg_train_positive_distance, epoch)
+    writer.add_scalar('Test Avg Neg Distance', avg_test_negative_distance, epoch)
+    writer.add_scalar('Test Avg Pos Distance', avg_test_positive_distance, epoch)
 
-# plot results
-plt.figure()
-plt.plot(train_losses, label='Training Loss')
-plt.plot(test_losses, label='Test Loss')
-plt.xlabel('Epoch')
-plt.ylabel('Loss')
-plt.title('Training and Test Loss')
-plt.legend()
-plt.savefig('../plots/full/model_loss_curve.png')
-plt.close()
+torch.save(model.state_dict(), log_dir)
 
-# save metrics
-final_performance = {
-    "train_losses": train_losses,
-    "test_losses": test_losses,
-    "train_negative_distances": train_negative_distances,
-    "train_positive_distances": train_positive_distances,
-    "test_negative_distances": test_negative_distances,
-    "test_positive_distances": test_positive_distances
-}
-
-with open("../performance_metrics/full/final_performance.json", "w") as f: json.dump(final_performance, f, indent=4)
-
-torch.save(model.state_dict(), "../saved_models/final_model.pth")
+writer.close()

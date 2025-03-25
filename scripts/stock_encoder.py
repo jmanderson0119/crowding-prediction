@@ -14,6 +14,8 @@ class StockEncoder(nn.Module):
         """
         super().__init__()
         self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, batch_first=batch_first)
+        self.fc = nn.Linear(hidden_size, hidden_size // 2)
+        self.relu = nn.ReLU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """        
@@ -22,4 +24,6 @@ class StockEncoder(nn.Module):
         """
         x = x.squeeze(0).unsqueeze(-1)
         _, (h_n, _) = self.lstm(x)
-        return h_n[-1]
+        h_n = self.fc(h_n[-1])
+        h_n = self.relu(h_n)
+        return h_n
