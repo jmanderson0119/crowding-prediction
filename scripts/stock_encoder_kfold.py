@@ -1,8 +1,7 @@
 import os
-import json
 import torch
 import yaml
-import matplotlib.pyplot as plt
+import numpy as np
 from sklearn.model_selection import KFold
 from torch.utils.data import DataLoader, Subset
 from torch.utils.tensorboard import SummaryWriter
@@ -23,24 +22,11 @@ num_epochs = config["training"]["num_epochs"]
 k_folds = config["training"]["folds"]
 margin = config["training"]["margin"]
 
-# storage of performance metrics
-os.makedirs("../performance_metrics/kfold", exist_ok=True)
-os.makedirs("../plots/kfold", exist_ok=True)
-
 # load data
 train_dataset = StockPairs("../data/processed_data/training_pairs.csv")
 
 # init K-fold cross-validation
 kfold = KFold(n_splits=k_folds, shuffle=True)
-
-# performance tracking
-fold_metrics = []
-all_train_losses = []
-all_val_losses = []
-all_train_negative_distances = []
-all_train_positive_distances = []
-all_val_negative_distances = []
-all_val_positive_distances = []
 
 # create log directory
 timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -67,14 +53,6 @@ for fold, (train_ids, val_ids) in enumerate(kfold.split(train_dataset)):
     
     train_loader = DataLoader(train_subsampler, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_subsampler, batch_size=batch_size, shuffle=False)
-    
-    # fold performance tracking
-    fold_train_losses = []
-    fold_val_losses = []
-    fold_train_negative_distances = []
-    fold_train_positive_distances = []
-    fold_val_negative_distances = []
-    fold_val_positive_distances = []
     
     # train loop
     for epoch in range(num_epochs):
@@ -104,14 +82,9 @@ for fold, (train_ids, val_ids) in enumerate(kfold.split(train_dataset)):
             
             epoch_loss += loss.item()
         
-        avg_train_loss = float(epoch_loss / len(train_loader))
-        fold_train_losses.append(avg_train_loss)
-        
-        # average distances
-        avg_train_negative_distance = float(sum(train_negative_distances) / len(train_negative_distances)) if train_negative_distances else 0.0
-        avg_train_positive_distance = float(sum(train_positive_distances) / len(train_positive_distances)) if train_positive_distances else 0.0
-        fold_train_negative_distances.append(avg_train_negative_distance)
-        fold_train_positive_distances.append(avg_train_positive_distance)
+        avg_train_loss = epoch_loss / len(train_loader)
+        avg_train_negative_distance = np.mean(train_negative_distances) if train_negative_distances else 0.0
+        avg_train_positive_distance = np.mean(train_positive_distances) if train_positive_distances else 0.0
         
         # val loop
         model.eval()
@@ -136,13 +109,9 @@ for fold, (train_ids, val_ids) in enumerate(kfold.split(train_dataset)):
                 
                 val_loss += loss.item()
         
-        avg_val_loss = float(val_loss / len(val_loader))
-        fold_val_losses.append(avg_val_loss)
-        
-        avg_val_negative_distance = float(sum(val_negative_distances) / len(val_negative_distances)) if val_negative_distances else 0.0
-        avg_val_positive_distance = float(sum(val_positive_distances) / len(val_positive_distances)) if val_positive_distances else 0.0
-        fold_val_negative_distances.append(avg_val_negative_distance)
-        fold_val_positive_distances.append(avg_val_positive_distance)
+        avg_val_loss = val_loss / len(val_loader)
+        avg_val_negative_distance = np.mean(val_negative_distances) if val_negative_distances else 0.0
+        avg_val_positive_distance = np.mean(val_positive_distances) if val_positive_distances else 0.0
         
         print(f"Fold {fold + 1} - Epoch {epoch + 1}/{num_epochs}, "
               f"Train Loss: {avg_train_loss:.12f}, "
